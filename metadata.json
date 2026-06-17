@@ -1,0 +1,10 @@
+{
+  "name": "Nazcube HMS v1 + residents login - app script deploy convert",
+  "description": "v1 + RL",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
