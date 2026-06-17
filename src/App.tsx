@@ -171,6 +171,7 @@ export default function App() {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [showConfigPopup, setShowConfigPopup] = useState<boolean>(false);
+  const [isStartupLoading, setIsStartupLoading] = useState<boolean>(true);
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -180,6 +181,7 @@ export default function App() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [showUrlConfigInLogin, setShowUrlConfigInLogin] = useState(false);
+  const [rememberMe, setRememberMe] = useState<boolean>(true);
 
   // OTP Reset password State
   const [forgotEmail, setForgotEmail] = useState("");
@@ -237,40 +239,118 @@ export default function App() {
     });
   };
 
-  // Initialize Connection state
+  // Session Recovery on Mount & Activity Monitoring to support remember-me & 1 hr auto-logout
   useEffect(() => {
-    let savedUrl = localStorage.getItem("naz_gas_url");
-    const savedStates = localStorage.getItem("naz_local_db");
+    const savedUserStr = localStorage.getItem("naz_hms_session_user");
+    const savedTimeStr = localStorage.getItem("naz_hms_session_time");
     
-    // Auto-detect if injected by Google Apps Script template hosting environment
-    // @ts-ignore
-    const injectedUrl = window.GOOGLE_SCRIPT_URL;
-    if (!savedUrl && injectedUrl && typeof injectedUrl === "string" && injectedUrl.startsWith("https://") && !injectedUrl.includes("<?=")) {
-      savedUrl = injectedUrl;
-      localStorage.setItem("naz_gas_url", savedUrl);
-    }
-    
-    // Fall back to code-level DEFAULT_GAS_URL if local storage is blank/null and configured
-    if (!savedUrl && DEFAULT_GAS_URL && !DEFAULT_GAS_URL.includes("xxxxxxxxxxxxxxxx")) {
-      savedUrl = DEFAULT_GAS_URL;
-      localStorage.setItem("naz_gas_url", savedUrl);
-    }
-    
-    if (savedStates) {
-      try {
-        setDbState(sanitizeState(JSON.parse(savedStates)));
-      } catch (e) {
-        // Fall back to default seed data
+    if (savedUserStr && savedTimeStr) {
+      const savedTime = parseInt(savedTimeStr, 10);
+      const now = Date.now();
+      
+      if (!isNaN(savedTime) && (now - savedTime) < 3600000) { // 1 Hour (3600000 ms) limit
+        try {
+          const parsedUser = JSON.parse(savedUserStr);
+          setCurrentUser(parsedUser);
+          localStorage.setItem("naz_hms_session_time", String(now));
+        } catch (e) {
+          // invalid json, ignore
+        }
+      } else {
+        localStorage.removeItem("naz_hms_session_user");
+        localStorage.removeItem("naz_hms_session_time");
       }
     }
+  }, []);
 
-    if (savedUrl) {
-      setGasUrl(savedUrl);
-      testConnectionAndSync(savedUrl);
-    } else {
-      // First opening - show required popup
-      setShowConfigPopup(true);
-    }
+  // Track user activity to refresh inactive auto-logout timer
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const refreshSessionTimer = () => {
+      const hasSession = localStorage.getItem("naz_hms_session_user");
+      if (hasSession) {
+        localStorage.setItem("naz_hms_session_time", String(Date.now()));
+      }
+    };
+
+    window.addEventListener("click", refreshSessionTimer, { passive: true });
+    window.addEventListener("keydown", refreshSessionTimer, { passive: true });
+    window.addEventListener("mousemove", refreshSessionTimer, { passive: true });
+    window.addEventListener("scroll", refreshSessionTimer, { passive: true });
+    window.addEventListener("touchstart", refreshSessionTimer, { passive: true });
+
+    return () => {
+      window.removeEventListener("click", refreshSessionTimer);
+      window.removeEventListener("keydown", refreshSessionTimer);
+      window.removeEventListener("mousemove", refreshSessionTimer);
+      window.removeEventListener("scroll", refreshSessionTimer);
+      window.removeEventListener("touchstart", refreshSessionTimer);
+    };
+  }, [currentUser]);
+
+  // Periodic inactive session check (every 10 seconds)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const checkInterval = setInterval(() => {
+      const savedUserStr = localStorage.getItem("naz_hms_session_user");
+      const savedTimeStr = localStorage.getItem("naz_hms_session_time");
+      if (savedUserStr && savedTimeStr) {
+        const savedTime = parseInt(savedTimeStr, 10);
+        if (!isNaN(savedTime) && (Date.now() - savedTime) >= 3600000) {
+          setCurrentUser(null);
+          localStorage.removeItem("naz_hms_session_user");
+          localStorage.removeItem("naz_hms_session_time");
+          alert("Session expired. You have been automatically logged out due to 1 hour of inactivity.");
+        }
+      }
+    }, 10000);
+
+    return () => clearInterval(checkInterval);
+  }, [currentUser]);
+
+  // Initialize Connection state
+  useEffect(() => {
+    const initializeApp = async () => {
+      let savedUrl = localStorage.getItem("naz_gas_url");
+      const savedStates = localStorage.getItem("naz_local_db");
+      
+      // Auto-detect if injected by Google Apps Script template hosting environment
+      // @ts-ignore
+      const injectedUrl = window.GOOGLE_SCRIPT_URL;
+      if (!savedUrl && injectedUrl && typeof injectedUrl === "string" && injectedUrl.startsWith("https://") && !injectedUrl.includes("<?=")) {
+        savedUrl = injectedUrl;
+        localStorage.setItem("naz_gas_url", savedUrl);
+      }
+      
+      // Fall back to code-level DEFAULT_GAS_URL if local storage is blank/null and configured
+      if (!savedUrl && DEFAULT_GAS_URL && !DEFAULT_GAS_URL.includes("xxxxxxxxxxxxxxxx")) {
+        savedUrl = DEFAULT_GAS_URL;
+        localStorage.setItem("naz_gas_url", savedUrl);
+      }
+      
+      if (savedStates) {
+        try {
+          setDbState(sanitizeState(JSON.parse(savedStates)));
+        } catch (e) {
+          // Fall back to default seed data
+        }
+      }
+
+      if (savedUrl) {
+        setGasUrl(savedUrl);
+        // Await the connection test to let the startup loader give it time to connect
+        await testConnectionAndSync(savedUrl, false, false);
+      } else {
+        // First opening - show required popup and disable startup loader
+        setShowConfigPopup(true);
+      }
+      
+      setIsStartupLoading(false);
+    };
+
+    initializeApp();
   }, []);
 
   // Sync to local storage as fallback
@@ -279,9 +359,16 @@ export default function App() {
   }, [dbState]);
 
   // Main HTTP Sync logic
-  const testConnectionAndSync = async (targetUrl: string, notifySuccess = false) => {
+  const [isLockedForSync, setIsLockedForSync] = useState(false);
+
+  const testConnectionAndSync = async (targetUrl: string, notifySuccess = false, silent = false) => {
     if (!targetUrl) return false;
-    setIsSyncing(true);
+    
+    // Prevent multiple parallel syncs
+    if (isLockedForSync) return false;
+    setIsLockedForSync(true);
+
+    if (!silent) setIsSyncing(true);
     try {
       // Check if they pasted the /edit or /editor URL
       if (targetUrl.includes("/edit") || !targetUrl.includes("/exec")) {
@@ -368,9 +455,21 @@ export default function App() {
       }
       return false;
     } finally {
-      setIsSyncing(false);
+      setIsLockedForSync(false);
+      if (!silent) setIsSyncing(false);
     }
   };
+
+  // Auto-reload and synchronization background timer (every 5 seconds)
+  useEffect(() => {
+    if (!gasUrl) return;
+    
+    const intervalId = setInterval(() => {
+      testConnectionAndSync(gasUrl, false, true);
+    }, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [gasUrl]);
 
   // POST operation helper to update Sheets Web API
   const performPostAction = async (action: string, payload: any) => {
@@ -430,8 +529,10 @@ export default function App() {
   };
 
   // Trigger Sync Manual Click
-  const handleReloadData = () => {
-    testConnectionAndSync(gasUrl, true);
+  const handleReloadData = async () => {
+    setIsStartupLoading(true);
+    await testConnectionAndSync(gasUrl, true);
+    setIsStartupLoading(false);
   };
 
   // Submit Sheets setup modal
@@ -446,7 +547,9 @@ export default function App() {
       return;
     }
     setGasUrl(sanitizedUrl);
+    setIsStartupLoading(true);
     const success = await testConnectionAndSync(sanitizedUrl, true);
+    setIsStartupLoading(false);
     if (success) {
       setShowConfigPopup(false);
     } else {
@@ -520,6 +623,10 @@ export default function App() {
         };
         
         setCurrentUser(syntheticUser);
+        if (rememberMe) {
+          localStorage.setItem("naz_hms_session_user", JSON.stringify(syntheticUser));
+          localStorage.setItem("naz_hms_session_time", String(Date.now()));
+        }
         setLoginEmail("");
         setLoginPassword("");
       } else {
@@ -563,6 +670,10 @@ export default function App() {
         return;
       }
       setCurrentUser(userObj);
+      if (rememberMe) {
+        localStorage.setItem("naz_hms_session_user", JSON.stringify(userObj));
+        localStorage.setItem("naz_hms_session_time", String(Date.now()));
+      }
       // Success auto navigating
       setLoginEmail("");
       setLoginPassword("");
@@ -576,6 +687,15 @@ export default function App() {
     setLoginEmail(emailVal);
     setLoginPassword(passVal);
     setLoginError("");
+  };
+
+  const handleLogoutSession = (typeAfterLogout?: "management" | "resident") => {
+    setCurrentUser(null);
+    localStorage.removeItem("naz_hms_session_user");
+    localStorage.removeItem("naz_hms_session_time");
+    if (typeAfterLogout) {
+      setLoginType(typeAfterLogout);
+    }
   };
 
   // OTP Password Reset Simulation
@@ -675,57 +795,61 @@ export default function App() {
   // Sidebar logic toggles
   const computedCollapsed = isPinned ? sidebarCollapsed : !isHovered;
 
-  // Sync state mutation functions from child tabs
+  // Sync state mutation functions from child tabs with high-performance optimistic rendering & non-blocking Sheets sync
   const handleAddPayment = async (newPmt: Payment) => {
-    if (!gasUrl) {
-      setDbState((prev) => ({
-        ...prev,
-        payments: [...prev.payments, newPmt]
-      }));
-      return;
+    setDbState((prev) => ({
+      ...prev,
+      payments: [...prev.payments, newPmt]
+    }));
+    if (gasUrl) {
+      performPostAction("addPayment", { data: newPmt }).catch(err => {
+        console.error("Delayed payment write error:", err);
+      });
     }
-    await performPostAction("addPayment", { data: newPmt });
   };
 
   const handleUpdatePayment = async (recordId: string, updatedPmt: Payment) => {
-    if (!gasUrl) {
-      setDbState((prev) => ({
-        ...prev,
-        payments: prev.payments.map(p => p["RECORD ID"] === recordId ? updatedPmt : p)
-      }));
-      return;
+    setDbState((prev) => ({
+      ...prev,
+      payments: prev.payments.map(p => p["RECORD ID"] === recordId ? updatedPmt : p)
+    }));
+    if (gasUrl) {
+      performPostAction("updatePayment", { recordId, data: updatedPmt }).catch(err => {
+        console.error("Delayed payment edit error:", err);
+      });
     }
-    await performPostAction("updatePayment", { recordId, data: updatedPmt });
   };
 
   const handleAddPaymentsBatch = async (newPmts: Payment[]) => {
-    if (!gasUrl) {
-      setDbState((prev) => ({
-        ...prev,
-        payments: [...prev.payments, ...newPmts]
-      }));
-      return;
+    setDbState((prev) => ({
+      ...prev,
+      payments: [...prev.payments, ...newPmts]
+    }));
+    if (gasUrl) {
+      performPostAction("addPaymentsBatch", { data: newPmts }).catch(err => {
+        console.error("Delayed payment batch write error:", err);
+      });
     }
-    await performPostAction("addPaymentsBatch", { data: newPmts });
   };
 
   const handleUpdatePaymentsBatch = async (dataArray: { recordId: string; data: Payment }[]) => {
-    if (!gasUrl) {
-      setDbState((prev) => {
-        const updatedPayments = [...prev.payments];
-        dataArray.forEach((item) => {
-          const idx = updatedPayments.findIndex(p => p["RECORD ID"] === item.recordId);
-          if (idx !== -1) {
-            updatedPayments[idx] = item.data;
-          } else {
-            updatedPayments.push(item.data);
-          }
-        });
-        return { ...prev, payments: updatedPayments };
+    setDbState((prev) => {
+      const updatedPayments = [...prev.payments];
+      dataArray.forEach((item) => {
+        const idx = updatedPayments.findIndex(p => p["RECORD ID"] === item.recordId);
+        if (idx !== -1) {
+          updatedPayments[idx] = item.data;
+        } else {
+          updatedPayments.push(item.data);
+        }
       });
-      return;
+      return { ...prev, payments: updatedPayments };
+    });
+    if (gasUrl) {
+      performPostAction("updatePaymentsBatch", { data: dataArray }).catch(err => {
+        console.error("Delayed payment batch update error:", err);
+      });
     }
-    await performPostAction("updatePaymentsBatch", { data: dataArray });
   };
 
   const handleAddResident = async (newRes: Resident) => {
@@ -734,7 +858,9 @@ export default function App() {
       residents: [...prev.residents, newRes]
     }));
     if (gasUrl) {
-      await performPostAction("addResident", { data: newRes });
+      performPostAction("addResident", { data: newRes }).catch(err => {
+        console.error("Delayed resident write error:", err);
+      });
     }
   };
 
@@ -744,7 +870,9 @@ export default function App() {
       residents: prev.residents.map(r => r["OWNER ID"] === ownerIdVal ? updatedRes : r)
     }));
     if (gasUrl) {
-      await performPostAction("updateResident", { ownerId: ownerIdVal, data: updatedRes });
+      performPostAction("updateResident", { ownerId: ownerIdVal, data: updatedRes }).catch(err => {
+        console.error("Delayed resident edit error:", err);
+      });
     }
   };
 
@@ -754,7 +882,9 @@ export default function App() {
       residents: prev.residents.filter(r => r["OWNER ID"] !== ownerIdVal)
     }));
     if (gasUrl) {
-      await performPostAction("deleteResident", { ownerId: ownerIdVal });
+      performPostAction("deleteResident", { ownerId: ownerIdVal }).catch(err => {
+        console.error("Delayed resident delete error:", err);
+      });
     }
   };
 
@@ -764,7 +894,9 @@ export default function App() {
       expenses: [...prev.expenses, newExp]
     }));
     if (gasUrl) {
-      await performPostAction("addExpense", { data: newExp });
+      performPostAction("addExpense", { data: newExp }).catch(err => {
+        console.error("Delayed expense write error:", err);
+      });
     }
   };
 
@@ -774,7 +906,9 @@ export default function App() {
       expenses: prev.expenses.map(e => e["RECORD ID"] === recordId ? updatedExp : e)
     }));
     if (gasUrl) {
-      await performPostAction("updateExpense", { recordId, data: updatedExp });
+      performPostAction("updateExpense", { recordId, data: updatedExp }).catch(err => {
+        console.error("Delayed expense edit error:", err);
+      });
     }
   };
 
@@ -784,7 +918,9 @@ export default function App() {
       expenses: prev.expenses.filter(e => e["RECORD ID"] !== recordId)
     }));
     if (gasUrl) {
-      await performPostAction("deleteExpense", { recordId });
+      performPostAction("deleteExpense", { recordId }).catch(err => {
+        console.error("Delayed expense delete error:", err);
+      });
     }
   };
 
@@ -794,7 +930,9 @@ export default function App() {
       products: [...prev.products, newProd]
     }));
     if (gasUrl) {
-      await performPostAction("addProduct", { data: newProd });
+      performPostAction("addProduct", { data: newProd }).catch(err => {
+        console.error("Delayed product write error:", err);
+      });
     }
   };
 
@@ -804,7 +942,9 @@ export default function App() {
       products: prev.products.map(p => p.ID === pId ? updatedProd : p)
     }));
     if (gasUrl) {
-      await performPostAction("updateProduct", { id: pId, data: updatedProd });
+      performPostAction("updateProduct", { id: pId, data: updatedProd }).catch(err => {
+        console.error("Delayed product edit error:", err);
+      });
     }
   };
 
@@ -814,7 +954,9 @@ export default function App() {
       products: prev.products.filter(p => p.ID !== pId)
     }));
     if (gasUrl) {
-      await performPostAction("deleteProduct", { id: pId });
+      performPostAction("deleteProduct", { id: pId }).catch(err => {
+        console.error("Delayed product delete error:", err);
+      });
     }
   };
 
@@ -824,7 +966,9 @@ export default function App() {
       users: [...prev.users, newUser]
     }));
     if (gasUrl) {
-      await performPostAction("addUser", { data: newUser });
+      performPostAction("addUser", { data: newUser }).catch(err => {
+        console.error("Delayed user write error:", err);
+      });
     }
   };
 
@@ -834,7 +978,9 @@ export default function App() {
       users: prev.users.map(u => u.ID === uId ? updatedUser : u)
     }));
     if (gasUrl) {
-      await performPostAction("updateUser", { id: uId, data: updatedUser });
+      performPostAction("updateUser", { id: uId, data: updatedUser }).catch(err => {
+        console.error("Delayed user edit error:", err);
+      });
     }
   };
 
@@ -844,19 +990,22 @@ export default function App() {
       users: prev.users.filter(u => u.ID !== uId)
     }));
     if (gasUrl) {
-      await performPostAction("deleteUser", { id: uId });
+      performPostAction("deleteUser", { id: uId }).catch(err => {
+        console.error("Delayed user delete error:", err);
+      });
     }
   };
 
   const handleUpdateSettings = async (updatedSettings: AppSettings) => {
-    if (!gasUrl) {
-      setDbState((prev) => ({
-        ...prev,
-        settings: updatedSettings
-      }));
-      return;
+    setDbState((prev) => ({
+      ...prev,
+      settings: updatedSettings
+    }));
+    if (gasUrl) {
+      performPostAction("updateSettings", { data: updatedSettings }).catch(err => {
+        console.error("Delayed settings edit error:", err);
+      });
     }
-    await performPostAction("updateSettings", { data: updatedSettings });
   };
 
   const handleUploadLogo = async (base64Data: string, fileName: string): Promise<string> => {
@@ -1429,6 +1578,19 @@ export default function App() {
                 )}
               </div>
 
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
+                  />
+                  <span className="text-slate-600 font-semibold text-[11px]">Remember me on this device</span>
+                </label>
+                <span className="text-slate-400 font-mono text-[9.5px] bg-slate-100/80 rounded px-1.5 py-0.5" title="Auto logout matches system activity">1 hr session</span>
+              </div>
+
               <button
                 type="submit"
                 id="submit-login-btn"
@@ -1659,6 +1821,7 @@ export default function App() {
             </div>
           </div>
         )}
+        {renderStartupLoader()}
       </div>
     );
   }
@@ -1963,6 +2126,39 @@ export default function App() {
     );
   };
 
+  function renderStartupLoader() {
+    if (!isStartupLoading) return null;
+    return (
+      <div id="startup-freeze-loader" className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6 text-white select-none pointer-events-auto">
+        <div className="w-full max-w-sm bg-slate-800 rounded-3xl border border-slate-700/50 p-8 shadow-2xl flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative flex items-center justify-center w-16 h-16 bg-slate-700/50 rounded-2xl border border-slate-600/50 mb-4 animate-pulse">
+            <Database className="w-8 h-8 text-indigo-400" />
+            <span className="absolute inset-0 rounded-2xl border-2 border-indigo-400/40 animate-ping opacity-75"></span>
+          </div>
+          
+          <h3 className="text-base font-bold text-white tracking-tight mb-1 text-center">
+            Connecting Database API
+          </h3>
+          <span className="text-[10px] text-indigo-400 font-mono tracking-widest uppercase font-bold mb-4 font-sans">
+            SYNC VERIFICATION IN PROGRESS
+          </span>
+          
+          <p className="text-slate-400 text-xs leading-relaxed text-center mb-6 font-sans">
+            Establishing initial handshake and verifying data schemas with Google Sheets. Please wait...
+          </p>
+          
+          <div className="relative w-full bg-slate-750 border border-slate-700/40 rounded-full h-2 overflow-hidden shadow-inner font-sans">
+            <div className="absolute inset-y-0 h-full bg-indigo-500 rounded-full animate-slide-progress" style={{ width: '50%' }}></div>
+          </div>
+          
+          <span className="text-[9px] uppercase font-bold tracking-widest text-slate-500 mt-4 font-mono">
+            RMS SECURE PROTOCOL
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   // --- LOGGED IN USER INTERFACE DASHBOARD PANEL ---
   if (currentUser?.Role === "security") {
     return (
@@ -1977,8 +2173,7 @@ export default function App() {
           isDarkMode={isDarkMode}
           onToggleDarkMode={toggleDarkMode}
           onLogOut={() => {
-            setCurrentUser(null);
-            setLoginType("management");
+            handleLogoutSession("management");
           }}
           onUploadFile={handleUploadFile}
           onUpdateVisitorLogs={(updated) => {
@@ -2000,6 +2195,7 @@ export default function App() {
             }
           }}
         />
+        {renderStartupLoader()}
       </div>
     );
   }
@@ -2014,8 +2210,7 @@ export default function App() {
           state={dbState}
           residentUser={currentUser}
           onLogOut={() => {
-            setCurrentUser(null);
-            setLoginType("resident");
+            handleLogoutSession("resident");
           }}
           onAddComplaint={(newComplaint) => {
             setDbState(prev => {
@@ -2052,6 +2247,7 @@ export default function App() {
             }}
           />
         )}
+        {renderStartupLoader()}
       </div>
     );
   }
@@ -2097,7 +2293,7 @@ export default function App() {
               {(!computedCollapsed || mobileMenuOpen) && (
                 <div className="animate-in fade-in duration-300">
                   <span className="font-bold text-xs tracking-tight block text-slate-900 font-sans">{dbState.settings.companyName || "Nazcube Solution"}</span>
-                  <span className="text-[9.5px] text-slate-400 font-medium block">Residences HMS Suite</span>
+                  <span className="text-[9.5px] text-slate-400 font-medium block">Residences MS Suite</span>
                 </div>
               )}
             </div>
@@ -2263,7 +2459,7 @@ export default function App() {
               ) : isConnected ? (
                 <>
                   <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Verified Google Sheets</span>
+                  <span>Verified</span>
                 </>
               ) : (
                 <>
@@ -2271,15 +2467,6 @@ export default function App() {
                   <span>Local Sandbox (Click to Sync)</span>
                 </>
               )}
-            </button>
-
-            {/* Sync URL configurations trigger */}
-            <button
-              onClick={() => setShowConfigPopup(true)}
-              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-250/20 rounded-xl transition cursor-pointer"
-              title="Sheets Connection manager"
-            >
-              <Database className="w-4 h-4 text-indigo-600" />
             </button>
 
             {/* Dark Mode Toggle */}
@@ -2334,7 +2521,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       setShowUserDropdown(false);
-                      setCurrentUser(null);
+                      handleLogoutSession();
                     }}
                     className="w-full text-left p-2 hover:bg-rose-50 rounded-xl font-semibold text-rose-500 flex items-center gap-2 cursor-pointer border-t border-slate-100/50"
                   >
@@ -2467,6 +2654,7 @@ export default function App() {
               currentUser={currentUser}
               onUpdateSettings={handleUpdateSettings}
               onUploadLogo={handleUploadLogo}
+              onOpenConnectionManager={() => setShowConfigPopup(true)}
             />
           )}
 
@@ -2479,20 +2667,20 @@ export default function App() {
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200 text-gray-900 text-xs">
             <div className="flex items-center gap-2 text-indigo-600 mb-3">
               <Database className="w-6 h-6 shrink-0" />
-              <h3 className="text-base font-bold text-slate-800">Configure Nazcube HMS Sheet API</h3>
+              <h3 className="text-base font-bold text-slate-800">Configure Database API Endpoint</h3>
             </div>
             
             <p className="text-gray-500 leading-relaxed mb-4">
-              Enter your deployed **Google Apps Script Web App URL** below to connect this client application directly to your active Google Sheet (2 tabs spreadsheet layout).
+              Enter your Database API Endpoint below to connect this application directly to your active database.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-gray-500 font-semibold mb-1">Google Apps Script Web App URL</label>
+                <label className="block text-gray-500 font-semibold mb-1">Database API Endpoint</label>
                 <input
                   required
                   type="text"
-                  placeholder="https://script.google.com/macros/s/.../exec"
+                  placeholder="https://..."
                   id="gas-url-setup-input"
                   defaultValue={gasUrl}
                   className="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-xl font-mono text-[10.5px] outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500"
@@ -2500,9 +2688,9 @@ export default function App() {
               </div>
 
               <div className="p-3 bg-indigo-50 text-indigo-900 rounded-xl bg-opacity-70">
-                <span className="font-bold block text-[10px] uppercase">Default Local preview Sandbox:</span>
+                <span className="font-bold block text-[10px] uppercase">Default Demo Preview Sandbox:</span>
                 <p className="mt-0.5 leading-relaxed">
-                  If you haven't deployed your script yet, click **"Use Offline Demo Sandbox"** to test and explore the entire interface instantly using seeded variables. You can bind Google Sheets to it anytime later!
+                  If you don't have Database API Endpoint, click "Offline Demo Sandbox" to test and explore the entire system instantly (Demo Version). You can bind Database API Endpoint anytime later!
                 </p>
               </div>
 
@@ -2517,7 +2705,7 @@ export default function App() {
                   }}
                   className="py-2.5 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 font-semibold text-gray-650 transition cursor-pointer"
                 >
-                  Use Offline Demo Sandbox
+                  Offline Demo Sandbox
                 </button>
                 <button
                   type="button"
@@ -2548,6 +2736,8 @@ export default function App() {
           }}
         />
       )}
+
+      {renderStartupLoader()}
     </div>
   );
 }
