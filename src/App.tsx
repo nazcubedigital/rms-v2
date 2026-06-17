@@ -122,6 +122,47 @@ import {
   Calendar
 } from "lucide-react";
 
+function formatMalaysianPhoneDuringTyping(value: string, sysPrefix: string = "+60"): string {
+  if (!value) return "";
+  
+  // Extract only digits to find core number
+  let cleaned = value.replace(/\D/g, "");
+  
+  const rawPrefix = sysPrefix.replace("+", ""); // e.g. "60"
+  
+  if (cleaned.startsWith(rawPrefix)) {
+    cleaned = cleaned.slice(rawPrefix.length);
+  } else if (cleaned.startsWith("0")) {
+    cleaned = cleaned.slice(1);
+  }
+  
+  // If there are no actual digits typed, allow clearing out
+  if (cleaned.length === 0) {
+    if (value.startsWith("+")) return "+";
+    return "";
+  }
+  
+  // Limiting local core digits
+  cleaned = cleaned.slice(0, 10);
+  
+  let formatted = sysPrefix;
+  if (cleaned.length <= 2) {
+    formatted += cleaned;
+  } else if (cleaned.length <= 5) {
+    formatted += cleaned.slice(0, 2) + "-" + cleaned.slice(2);
+  } else {
+    formatted += cleaned.slice(0, 2) + "-" + cleaned.slice(2, 5) + " " + cleaned.slice(5);
+  }
+  
+  return formatted;
+}
+
+// BIND YOUR GOOGLE APPS SCRIPT WEB APP URL DIRECTLY TO CODE
+// You can edit the URL string below to bind your link permanently (works across all devices and browsers).
+// You can also specify this via VITE_GOOGLE_SCRIPT_URL in your Environment Settings.
+// If you manually write/connect a different sheets URL in the UI, it will override this default.
+export const DEFAULT_GAS_URL = ((import.meta as any).env)?.VITE_GOOGLE_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbz_xxxxxxxxxxxxxxxx_yyyyyyyyyyyyyyyy/exec";
+
 export default function App() {
   const [dbState, setDbState] = useState<DatabaseState>(DEFAULT_STATE);
   
@@ -206,6 +247,12 @@ export default function App() {
     const injectedUrl = window.GOOGLE_SCRIPT_URL;
     if (!savedUrl && injectedUrl && typeof injectedUrl === "string" && injectedUrl.startsWith("https://") && !injectedUrl.includes("<?=")) {
       savedUrl = injectedUrl;
+      localStorage.setItem("naz_gas_url", savedUrl);
+    }
+    
+    // Fall back to code-level DEFAULT_GAS_URL if local storage is blank/null and configured
+    if (!savedUrl && DEFAULT_GAS_URL && !DEFAULT_GAS_URL.includes("xxxxxxxxxxxxxxxx")) {
+      savedUrl = DEFAULT_GAS_URL;
       localStorage.setItem("naz_gas_url", savedUrl);
     }
     
@@ -418,10 +465,41 @@ export default function App() {
     if (loginType === "resident") {
       const residentObj = dbState.residents.find((r) => {
         const email = String(r.EMAIL || "").trim().toLowerCase();
-        const phone = String(r["PHONE 1"] || "").trim().replace(/\s/g, "");
-        const inputPass = loginPassword.trim().replace(/\s/g, "");
+        const storedPhone = String(r["PHONE 1"] || "").trim();
+        const typedPhone = loginPassword.trim();
         
-        return email === loginEmail.trim().toLowerCase() && phone === inputPass;
+        if (email !== loginEmail.trim().toLowerCase()) {
+          return false;
+        }
+
+        // Exact match
+        if (storedPhone === typedPhone) return true;
+
+        // Strip whitespace and try matching
+        const wStored = storedPhone.replace(/\s/g, "");
+        const wTyped = typedPhone.replace(/\s/g, "");
+        if (wStored === wTyped) return true;
+
+        // Strip all non-digit characters and try matching
+        const dStored = wStored.replace(/\D/g, "");
+        const dTyped = wTyped.replace(/\D/g, "");
+        if (dStored === dTyped) return true;
+
+        // Normalize country and local prefixes (e.g., +60 vs 0 vs 60)
+        const getPhoneCore = (numDigits: string) => {
+          let core = numDigits;
+          if (core.startsWith("60")) {
+            core = core.slice(2);
+          } else if (core.startsWith("0")) {
+            core = core.slice(1);
+          }
+          return core;
+        };
+
+        const coreStored = getPhoneCore(dStored);
+        const coreTyped = getPhoneCore(dTyped);
+
+        return coreStored && coreTyped && coreStored === coreTyped;
       });
 
       if (residentObj) {
@@ -1324,7 +1402,15 @@ export default function App() {
                     id="login-password-input"
                     placeholder={loginType === "resident" ? "+6012-XXXXXXX" : "••••••••"}
                     value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (loginType === "resident") {
+                        const sysPrefix = dbState.settings.phoneCountryCode || "+60";
+                        setLoginPassword(formatMalaysianPhoneDuringTyping(val, sysPrefix));
+                      } else {
+                        setLoginPassword(val);
+                      }
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 outline-none focus:ring-2 focus:ring-indigo-105 focus:border-indigo-400 transition"
                   />
                   <button
@@ -1405,6 +1491,13 @@ export default function App() {
                     className="px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 bg-slate-50 hover:bg-slate-100"
                   >
                     STAFF (Read Only)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickLoginFill("security@nazcube.com", "security123")}
+                    className="px-2 py-1.5 rounded-lg border border-rose-100 text-rose-700 bg-rose-50/50 hover:bg-rose-50 animate-pulse"
+                  >
+                    SECURITY GUARD (Active Patrol)
                   </button>
                 </div>
               </div>
@@ -1983,7 +2076,7 @@ export default function App() {
         onMouseLeave={handleMouseLeaveSidebar}
         className={`bg-white border-r border-slate-205/60 text-slate-700 flex flex-col justify-between transition-all duration-300 select-none
           fixed inset-y-0 left-0 z-50 transform ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} 
-          md:relative md:translate-x-0 shrink-0 md:h-auto h-full shadow-2xl md:shadow-none ${
+          md:sticky md:top-0 md:h-screen md:translate-x-0 shrink-0 h-full shadow-2xl md:shadow-none ${
             computedCollapsed ? "md:w-16" : "md:w-64"
           } w-64`}
       >

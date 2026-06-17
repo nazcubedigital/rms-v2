@@ -30,7 +30,8 @@ import {
   Video,
   RefreshCw,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  ExternalLink
 } from "lucide-react";
 import { getMalaysiaDateString, isCurrentTimeInTimeRange, getMalaysiaDateTimeString, formatDisplayTimestamp } from "../utils/dateUtils";
 
@@ -80,6 +81,7 @@ export default function SecurityVisitorTab({
   const [selectedScanPass, setSelectedScanPass] = useState<string>("");
   const [scanProgressLabel, setScanProgressLabel] = useState<string>("");
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("environment");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   
@@ -99,6 +101,21 @@ export default function SecurityVisitorTab({
   const [remarks, setRemarks] = useState("");
   const [formSuccess, setFormSuccess] = useState(false);
   const [formError, setFormError] = useState("");
+  const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
+
+  // Pre-authorized Active Passes Modal States
+  const [showPassesModal, setShowPassesModal] = useState(false);
+  const [modalSearchValue, setModalSearchValue] = useState("");
+  const [modalFilterType, setModalFilterType] = useState<string>("all");
+  const [modalPage, setModalPage] = useState(1);
+  const [modalItemsPerPage, setModalItemsPerPage] = useState(5);
+
+  // Auto-set default camera mode on active modality change
+  useEffect(() => {
+    if (activeCameraMode) {
+      setCameraFacingMode("environment");
+    }
+  }, [activeCameraMode]);
 
   // Camera stream initializer effect
   useEffect(() => {
@@ -111,9 +128,9 @@ export default function SecurityVisitorTab({
       try {
         const constraints = {
           video: {
-            facingMode: activeCameraMode === "qr" ? "environment" : "user",
-            width: { ideal: 640 },
-            height: { ideal: 480 }
+            facingMode: cameraFacingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
         };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -142,7 +159,7 @@ export default function SecurityVisitorTab({
         activeStream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [activeCameraMode]);
+  }, [activeCameraMode, cameraFacingMode]);
 
   const [jsQRReady, setJsQRReady] = useState(false);
 
@@ -300,23 +317,20 @@ export default function SecurityVisitorTab({
   const handleCapturePhoto = async () => {
     if (liveStream && videoRef.current) {
       try {
-        setCameraUploading(true);
-        setScanProgressLabel("Processing and uploading photograph to Drive...");
         const video = videoRef.current;
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
         const ctx = canvas.getContext("2d");
         if (ctx) {
+          // Mirror horizontal if using selfie/user camera for a natural photo feeling
+          if (cameraFacingMode === "user") {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+          }
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const base64Data = canvas.toDataURL("image/jpeg", 0.85);
-          
-          if (onUploadFile) {
-            const driveLink = await onUploadFile(base64Data, `security_bumper_audit_${Date.now()}.jpg`);
-            setVehiclePhoto(driveLink);
-          } else {
-            setVehiclePhoto(base64Data);
-          }
+          setVehiclePhoto(base64Data);
         }
         setActiveCameraMode(null);
       } catch (err) {
@@ -328,37 +342,17 @@ export default function SecurityVisitorTab({
         ];
         setVehiclePhoto(mockPhotos[Math.floor(Math.random() * mockPhotos.length)]);
         setActiveCameraMode(null);
-      } finally {
-        setCameraUploading(false);
-        setScanProgressLabel("");
       }
     } else {
       // Direct high-fidelity simulated photograph if no live device connected
-      setCameraUploading(true);
-      setScanProgressLabel("Simulating high-resolution automatic capture...");
-      setTimeout(async () => {
-        const mockPhotos = [
-          "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&q=80&w=600",
-          "https://images.unsplash.com/photo-1508974239320-0a029497e820?auto=format&fit=crop&q=80&w=600",
-          "https://images.unsplash.com/photo-1516576885502-d4995b4523d4?auto=format&fit=crop&q=80&w=600",
-          "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600"
-        ];
-        const chosen = mockPhotos[Math.floor(Math.random() * mockPhotos.length)];
-        
-        if (onUploadFile) {
-          try {
-            // Convert to a base64 simulation or directly use image URL, since it's mock we can write it
-            setVehiclePhoto(chosen);
-          } catch {
-            setVehiclePhoto(chosen);
-          }
-        } else {
-          setVehiclePhoto(chosen);
-        }
-        setCameraUploading(false);
-        setScanProgressLabel("");
-        setActiveCameraMode(null);
-      }, 850);
+      const mockPhotos = [
+        "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&q=80&w=600",
+        "https://images.unsplash.com/photo-1508974239320-0a029497e820?auto=format&fit=crop&q=80&w=600",
+        "https://images.unsplash.com/photo-1516576885502-d4995b4523d4?auto=format&fit=crop&q=80&w=600",
+        "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600"
+      ];
+      setVehiclePhoto(mockPhotos[Math.floor(Math.random() * mockPhotos.length)]);
+      setActiveCameraMode(null);
     }
   };
 
@@ -367,20 +361,10 @@ export default function SecurityVisitorTab({
     if (!file) return;
 
     try {
-      setCameraUploading(true);
-      setScanProgressLabel("Processing and uploading your camera snapshot...");
-      
       const reader = new FileReader();
       reader.onload = async () => {
         const base64Data = reader.result as string;
-        if (onUploadFile) {
-          const driveLink = await onUploadFile(base64Data, `security_bumper_drive_${Date.now()}.jpg`);
-          setVehiclePhoto(driveLink);
-        } else {
-          setVehiclePhoto(base64Data);
-        }
-        setCameraUploading(false);
-        setScanProgressLabel("");
+        setVehiclePhoto(base64Data);
         setActiveCameraMode(null);
       };
       reader.onerror = () => {
@@ -389,8 +373,6 @@ export default function SecurityVisitorTab({
       reader.readAsDataURL(file);
     } catch (err) {
       console.error("Camera upload capture error:", err);
-      setCameraUploading(false);
-      setScanProgressLabel("");
     }
   };
 
@@ -492,60 +474,88 @@ export default function SecurityVisitorTab({
   };
 
   // Check In Submit
-  const handleCheckInSubmit = (e: React.FormEvent) => {
+  const handleCheckInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingCheckIn) return;
     const cleanHouseUnit = String(houseUnit || '').trim();
     if (!cleanHouseUnit || !visitorName.trim() || !vehiclePlate.trim() || !passNumber.trim()) {
       setFormError("House unit, visitor name, vehicle plate, and visitor pass number are mandatory!");
       return;
     }
 
-    const newLog: VisitorLog = {
-      ID: `VL-${Math.floor(1000 + Math.random() * 9000)}`,
-      HOUSE_UNIT: cleanHouseUnit,
-      VISITOR_TYPE: visitorType,
-      VISITOR_NAME: visitorName.trim(),
-      PURPOSE: purpose.trim() || "Visiting resident",
-      VEHICLE_PLATE: vehiclePlate.trim().toUpperCase(),
-      DRIVING_LICENSE: drivingLicense.trim() || "N/A",
-      VEHICLE_PHOTO: vehiclePhoto.trim() || "https://images.unsplash.com/photo-1506015391300-4802dc74de2e?auto=format&fit=crop&q=80&w=350", // placeholder car plate image
-      PASS_NUMBER: passNumber.trim(),
-      CHECK_IN_TIME: getMalaysiaDateTimeString(),
-      CHECK_OUT_TIME: null,
-      PRE_AUTH_PASS_ID: scannedPass ? scannedPass.ID : null,
-      CREATED_BY: currentUser ? `${currentUser["Full Name"]} (${currentUser.Role})` : "On-Duty Guard",
-      REMARKS: remarks.trim()
-    };
+    try {
+      setIsSubmittingCheckIn(true);
+      setFormError("");
 
-    // If a pre-authorized pass was scanned, mark it as Used
-    if (scannedPass) {
-      const updatedPasses = visitorPasses.map((p) =>
-        p.ID === scannedPass.ID ? { ...p, STATUS: "Used" as const } : p
-      );
-      onUpdateVisitorPasses(updatedPasses);
+      let finalPhotoUrl = vehiclePhoto.trim();
+
+      // If the photo is a local base64 captured image or native upload, upload it to Drive now
+      if (finalPhotoUrl.startsWith("data:") && onUploadFile) {
+        try {
+          finalPhotoUrl = await onUploadFile(finalPhotoUrl, `security_bumper_audit_${Date.now()}.jpg`);
+        } catch (uploadErr) {
+          console.error("Delayed vehicle photo upload failed, using fallback:", uploadErr);
+          // Fallback to avoid dropping the whole log entry because of temporary network upload issues
+        }
+      }
+
+      // Default placeholder if empty or failed
+      if (!finalPhotoUrl) {
+        finalPhotoUrl = "https://images.unsplash.com/photo-1506015391305-4802dc74de2e?auto=format&fit=crop&q=80&w=350";
+      }
+
+      const newLog: VisitorLog = {
+        ID: `VL-${Math.floor(1000 + Math.random() * 9000)}`,
+        HOUSE_UNIT: cleanHouseUnit,
+        VISITOR_TYPE: visitorType,
+        VISITOR_NAME: visitorName.trim(),
+        PURPOSE: purpose.trim() || "Visiting resident",
+        VEHICLE_PLATE: vehiclePlate.trim().toUpperCase(),
+        DRIVING_LICENSE: drivingLicense.trim() || "N/A",
+        VEHICLE_PHOTO: finalPhotoUrl,
+        PASS_NUMBER: passNumber.trim(),
+        CHECK_IN_TIME: getMalaysiaDateTimeString(),
+        CHECK_OUT_TIME: null,
+        PRE_AUTH_PASS_ID: scannedPass ? scannedPass.ID : null,
+        CREATED_BY: currentUser ? `${currentUser["Full Name"]} (${currentUser.Role})` : "On-Duty Guard",
+        REMARKS: remarks.trim()
+      };
+
+      // If a pre-authorized pass was scanned, mark it as Used
+      if (scannedPass) {
+        const updatedPasses = visitorPasses.map((p) =>
+          p.ID === scannedPass.ID ? { ...p, STATUS: "Used" as const } : p
+        );
+        onUpdateVisitorPasses(updatedPasses);
+      }
+
+      onUpdateVisitorLogs([newLog, ...visitorLogs]);
+      setFormSuccess(true);
+      setFormError("");
+
+      // Reset fields
+      setHouseUnit("");
+      setVisitorType("visitor");
+      setVisitorName("");
+      setPurpose("");
+      setVehiclePlate("");
+      setDrivingLicense("");
+      setVehiclePhoto("");
+      setPassNumber("");
+      setRemarks("");
+      setScannedPass(null);
+      setScanPassId("");
+      setScanMessage({ text: "", type: "" });
+
+      setTimeout(() => {
+        setFormSuccess(false);
+      }, 4000);
+    } catch (err: any) {
+      console.error("Check-in submission failed:", err);
+      setFormError(err.message || "Something went wrong during check-in.");
+    } finally {
+      setIsSubmittingCheckIn(false);
     }
-
-    onUpdateVisitorLogs([newLog, ...visitorLogs]);
-    setFormSuccess(true);
-    setFormError("");
-
-    // Reset fields
-    setHouseUnit("");
-    setVisitorType("visitor");
-    setVisitorName("");
-    setPurpose("");
-    setVehiclePlate("");
-    setDrivingLicense("");
-    setVehiclePhoto("");
-    setPassNumber("");
-    setRemarks("");
-    setScannedPass(null);
-    setScanPassId("");
-    setScanMessage({ text: "", type: "" });
-
-    setTimeout(() => {
-      setFormSuccess(false);
-    }, 4000);
   };
 
   // Check Out Action
@@ -721,7 +731,7 @@ export default function SecurityVisitorTab({
       )}
       
       {isSecurityPortal ? (
-        <aside className={`fixed inset-y-0 left-0 z-50 transform ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:sticky md:top-0 md:h-screen md:translate-x-0 shrink-0 select-none transition-all duration-300 w-64 border-r flex flex-col justify-between ${isDarkMode ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}>
+        <aside className={`fixed inset-y-0 left-0 z-50 transform ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 shrink-0 select-none transition-all duration-300 w-64 border-r flex flex-col justify-between ${isDarkMode ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}>
           <div>
             <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? "border-slate-800" : "border-slate-200"}`}>
               <div className="flex items-center gap-2.5 overflow-hidden">
@@ -870,7 +880,7 @@ export default function SecurityVisitorTab({
         </aside>
       ) : null}
 
-      <div className={isSecurityPortal ? `flex-1 overflow-y-auto p-4 md:p-8 space-y-6 transition-colors duration-150 ${isDarkMode ? "bg-slate-900" : "bg-slate-50/50"}` : "space-y-6"}>
+      <div className={isSecurityPortal ? `flex-1 md:ml-64 overflow-y-auto p-4 md:p-8 space-y-6 transition-colors duration-150 ${isDarkMode ? "bg-slate-900" : "bg-slate-50/50"}` : "space-y-6"}>
         {isSecurityPortal && (
           <header className={`p-3.5 border rounded-2xl flex items-center justify-between md:hidden shrink-0 shadow-xs mb-4 ${isDarkMode ? "bg-slate-950 border-slate-800 text-slate-100" : "bg-white border-slate-150 text-slate-800"}`}>
             <div className="flex items-center gap-2.5">
@@ -1040,31 +1050,45 @@ export default function SecurityVisitorTab({
                   </div>
                 </div>
 
-                {/* Preloads slider */}
-                {visitorPasses.filter(p => p.STATUS === "Active").length > 0 && (
-                  <div className="bg-slate-50 rounded-2xl p-3 border border-slate-150">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Available Active Resident Passes (Click to scan simulation):</p>
-                    <div className="flex flex-wrap gap-2">
-                      {visitorPasses.filter(p => p.STATUS === "Active").map((p) => (
-                        <button
-                          key={p.ID}
-                          type="button"
-                          onClick={() => {
-                            setScanPassId(p.ID);
-                            handleSimulateQRScan(p.ID);
-                          }}
-                          className="bg-white border hover:border-indigo-400 hover:bg-indigo-50 text-[11px] p-2 rounded-xl text-left shadow-sm flex items-center justify-between gap-3 font-semibold text-slate-700 cursor-pointer transition"
-                        >
-                          <div>
-                            <span className="block font-bold text-slate-800">{p.VISITOR_NAME} ({p.VEHICLE_PLATE})</span>
-                            <span className="text-[9px] text-gray-400 font-mono">Unit {p.HOUSE_UNIT} | Exp: {p.END_DATE}</span>
-                          </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-indigo-600 animate-bounce" />
-                        </button>
-                      ))}
+                {/* Clean preloaded passes summary section */}
+                <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition duration-150 ${
+                  isDarkMode 
+                    ? "bg-slate-900/60 border-slate-800" 
+                    : "bg-slate-50 border-slate-150"
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      isDarkMode ? "bg-indigo-950/40 text-indigo-400" : "bg-indigo-50 text-indigo-600"
+                    }`}>
+                      <QrCode className="w-5 h-5 font-bold" />
+                    </div>
+                    <div>
+                      <h4 className={`text-xs font-bold leading-tight ${isDarkMode ? "text-slate-200" : "text-slate-800"}`}>
+                        Pre-Authorized Passes
+                      </h4>
+                      <p className={`text-[10.5px] mt-0.5 font-medium ${isDarkMode ? "text-slate-405" : "text-slate-500"}`}>
+                        <span className="font-extrabold text-indigo-600">{visitorPasses.filter(p => p.STATUS === "Active" && getMalaysiaDateString(p.END_DATE) >= getMalaysiaDateString(new Date())).length}</span> active passes available inside registry
+                      </p>
                     </div>
                   </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalSearchValue("");
+                      setModalFilterType("all");
+                      setModalPage(1);
+                      setShowPassesModal(true);
+                    }}
+                    className={`px-3.5 py-2 border rounded-xl font-bold flex items-center justify-center gap-1.5 text-[11px] cursor-pointer transition duration-150 shrink-0 ${
+                      isDarkMode 
+                        ? "border-slate-700 bg-slate-800 hover:bg-slate-750 text-slate-200" 
+                        : "border-slate-220 bg-white hover:bg-slate-100 text-slate-700 shadow-xs"
+                    }`}
+                  >
+                    <span>View All Active Passes</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-indigo-500" />
+                  </button>
+                </div>
 
                 {/* Scan Status Message */}
                 {scanMessage.text && (
@@ -1187,28 +1211,51 @@ export default function SecurityVisitorTab({
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block font-bold text-slate-700 mb-1">Vehicle Photo audit (Plate & Bumper URL)</label>
+                    <label className="block font-bold text-slate-700 mb-1">Vehicle Photo audit (Plate & Bumper)</label>
                     <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Camera className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="Paste or select image URL (or leave blank defaults to mock plate auto audit camera)"
-                          value={vehiclePhoto}
-                          onChange={(e) => setVehiclePhoto(e.target.value)}
-                          className="w-full text-[11px] pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 transition text-slate-800"
-                        />
-                      </div>
                       <button
                         type="button"
                         onClick={() => setActiveCameraMode("snapshot")}
-                        className="py-2 px-3 bg-indigo-55 font-bold hover:bg-indigo-100 text-indigo-700 rounded-xl text-[11px] shrink-0 cursor-pointer flex items-center gap-1 transition"
+                        className="py-2.5 px-4 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-750 font-bold border border-indigo-200 rounded-xl text-xs cursor-pointer flex items-center gap-2 transition duration-150"
                         title="Open Web Camera to Take Live Photo"
                       >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Snapshot camera</span>
+                        <Camera className="w-4 h-4 text-indigo-650" />
+                        <span>OPEN CAMERA / TAKE PHOTO</span>
                       </button>
                     </div>
+
+                    {vehiclePhoto && (
+                      <div className="mt-2.5 flex items-start gap-3 p-2 bg-slate-50 border border-slate-200 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-white shrink-0 shadow-xs">
+                          <img
+                            src={vehiclePhoto}
+                            alt="Vehicle Preview"
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              // If source isn't an image URL, we show a general icon/box
+                              (e.target as any).src = "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&q=80&w=150";
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1 space-y-0.5 min-w-0">
+                          <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider flex items-center gap-1 leading-none mt-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-505 animate-ping"></span>
+                            <span>Photo captured</span>
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-mono font-medium truncate">
+                            {vehiclePhoto.startsWith("data:") ? "Local snapshot (Awaiting upload checkout)" : vehiclePhoto}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setVehiclePhoto("")}
+                            className="text-[10px] text-red-500 hover:text-red-705 font-bold uppercase tracking-wider cursor-pointer transition deco-solid underline mt-1"
+                          >
+                            Remove / Retake
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="md:col-span-2">
@@ -1238,19 +1285,102 @@ export default function SecurityVisitorTab({
                 <div className="flex justify-end pt-2">
                   <button
                     type="submit"
-                    className="py-3 px-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow shadow-indigo-100 text-xs cursor-pointer tracking-wider"
+                    disabled={isSubmittingCheckIn}
+                    className="py-3 px-8 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow shadow-indigo-100 text-xs cursor-pointer tracking-wider transition duration-150"
                   >
-                    <Check className="w-4 h-4" />
-                    <span>AUTHORIZE ENTRY (CHECK-IN)</span>
+                    {isSubmittingCheckIn ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        <span>UPLOADING PHOTO & RECORDING...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>AUTHORIZE ENTRY (CHECK-IN)</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
             </div>
-
           </div>
 
-          {/* Right Side: Active inside vehicles & instant checkout */}
+            {/* Right Side: Active inside vehicles & instant checkout */}
           <div className="space-y-6">
+
+            {/* Manual Exit Dispatch (Checkout) */}
+            <div className={`rounded-3xl border p-5 shadow-sm space-y-4 ${
+              isDarkMode ? "bg-slate-900/90 border-slate-800 text-slate-100" : "bg-white border-slate-205 text-slate-800"
+            }`}>
+              <div>
+                <h3 className={`font-extrabold text-sm flex items-center gap-1.5 ${
+                  isDarkMode ? "text-slate-100" : "text-slate-800"
+                }`}>
+                  <Sliders className="w-4 h-4 text-indigo-500 animate-pulse" />
+                  Manual Exit Dispatch (Checkout)
+                </h3>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Directly check-out any on-site vehicles using their Plate Number or Pass Card ID.
+                </p>
+              </div>
+
+              <form onSubmit={handleManualCheckOutSubmit} className="space-y-3">
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter Plate or Pass Card ID..."
+                    value={manualCheckoutInput}
+                    onChange={(e) => setManualCheckoutInput(e.target.value)}
+                    className={`w-full p-2.5 text-xs rounded-xl border outline-none transition font-semibold ${
+                      isDarkMode 
+                        ? "bg-slate-850 border-slate-700 text-slate-105 focus:ring-2 focus:ring-slate-700 placeholder-slate-500" 
+                        : "bg-slate-50 border-slate-200 text-slate-800 focus:ring-2 focus:ring-indigo-150 placeholder-slate-400"
+                    }`}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold rounded-xl text-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Submit Visitor Exit</span>
+                </button>
+              </form>
+
+              {manualCheckoutSuccess && (
+                <div className={`p-3 text-[11px] font-bold rounded-xl border animate-in fade-in duration-150 leading-relaxed ${
+                  isDarkMode ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-100 text-emerald-800"
+                }`}>
+                  ✓ {manualCheckoutSuccess}
+                </div>
+              )}
+              {manualCheckoutError && (
+                <div className={`p-3 text-[11px] font-bold rounded-xl border animate-in fade-in duration-150 leading-relaxed ${
+                  isDarkMode ? "bg-rose-500/10 border-rose-500/20 text-rose-400" : "bg-rose-50 border-rose-100 text-rose-800"
+                }`}>
+                  ⚠️ {manualCheckoutError}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Shift summary widget */}
+            <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-3xl space-y-3">
+              <h4 className="font-bold text-xs text-indigo-800 uppercase tracking-widest flex items-center gap-1 leading-none font-mono">
+                <Clock className="w-4 h-4" /> Today's Shift Logs
+              </h4>
+              <div className="grid grid-cols-2 gap-3 text-center text-slate-800 font-sans">
+                <div className="bg-white p-3 rounded-2xl border border-indigo-100/50">
+                  <span className="block text-xl font-extrabold text-slate-800">{totalVisitsToday}</span>
+                  <span className="text-[10px] text-slate-400 font-bold">Shift Entrants</span>
+                </div>
+                <div className="bg-white p-3 rounded-2xl border border-indigo-100/50">
+                  <span className="block text-xl font-extrabold text-slate-800">{activeInsideVehicles.length}</span>
+                  <span className="text-[10px] text-slate-400 font-bold">On Premise Now</span>
+                </div>
+              </div>
+            </div>
             
             <div className="bg-white rounded-3xl border border-slate-205 p-5 shadow-sm space-y-4">
               <div>
@@ -1351,7 +1481,7 @@ export default function SecurityVisitorTab({
                           <div className="flex justify-between"><span className="font-bold text-slate-500">Destination:</span> <span className="font-extrabold text-slate-800">Unit {log.HOUSE_UNIT}</span></div>
                           <div className="flex justify-between"><span className="font-bold text-slate-500">Pass Card:</span> <span className="font-extrabold text-indigo-700">{log.PASS_NUMBER}</span></div>
                           <div className="flex justify-between truncate"><span className="font-bold text-slate-500">Driver:</span> <span className="font-extrabold truncate text-slate-800">{log.VISITOR_NAME}</span></div>
-                          <div className="flex justify-between"><span className="font-bold text-slate-500">Entered At:</span> <span className="text-[9.5px] font-bold text-slate-700">{formatDisplayTimestamp(log.CHECK_IN_TIME)}</span></div>
+                          <div className="flex justify-between truncate"><span className="font-bold text-slate-500">Entered At:</span> <span className="text-[9.5px] font-bold text-slate-700">{formatDisplayTimestamp(log.CHECK_IN_TIME)}</span></div>
                         </div>
                       </div>
                     );
@@ -1363,81 +1493,6 @@ export default function SecurityVisitorTab({
                 </div>
               )}
             </div>
-
-            {/* Manual Exit Dispatch (Checkout) */}
-            <div className={`rounded-3xl border p-5 shadow-sm space-y-4 ${
-              isDarkMode ? "bg-slate-900/90 border-slate-800 text-slate-100" : "bg-white border-slate-205 text-slate-800"
-            }`}>
-              <div>
-                <h3 className={`font-extrabold text-sm flex items-center gap-1.5 ${
-                  isDarkMode ? "text-slate-100" : "text-slate-800"
-                }`}>
-                  <Sliders className="w-4 h-4 text-indigo-500 animate-pulse" />
-                  Manual Exit Dispatch (Checkout)
-                </h3>
-                <p className="text-[10px] text-gray-400 mt-0.5">
-                  Directly check-out any on-site vehicles using their Plate Number or Pass Card ID.
-                </p>
-              </div>
-
-              <form onSubmit={handleManualCheckOutSubmit} className="space-y-3">
-                <div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter Plate or Pass Card ID..."
-                    value={manualCheckoutInput}
-                    onChange={(e) => setManualCheckoutInput(e.target.value)}
-                    className={`w-full p-2.5 text-xs rounded-xl border outline-none transition font-semibold ${
-                      isDarkMode 
-                        ? "bg-slate-800 border-slate-700 text-slate-105 focus:ring-2 focus:ring-slate-700 placeholder-slate-500" 
-                        : "bg-slate-50 border-slate-200 text-slate-800 focus:ring-2 focus:ring-indigo-150 placeholder-slate-400"
-                    }`}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold rounded-xl text-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-rose-100/5"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Submit Visitor Exit</span>
-                </button>
-              </form>
-
-              {manualCheckoutSuccess && (
-                <div className={`p-3 text-[11px] font-bold rounded-xl border animate-in fade-in duration-150 leading-relaxed ${
-                  isDarkMode ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-100 text-emerald-800"
-                }`}>
-                  ✓ {manualCheckoutSuccess}
-                </div>
-              )}
-              {manualCheckoutError && (
-                <div className={`p-3 text-[11px] font-bold rounded-xl border animate-in fade-in duration-150 leading-relaxed ${
-                  isDarkMode ? "bg-rose-500/10 border-rose-500/20 text-rose-400" : "bg-rose-50 border-rose-100 text-rose-800"
-                }`}>
-                  ⚠️ {manualCheckoutError}
-                </div>
-              )}
-            </div>
-
-            {/* Quick Shift summary widget */}
-            <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-3xl space-y-3">
-              <h4 className="font-bold text-xs text-indigo-800 uppercase tracking-widest flex items-center gap-1 leading-none font-mono">
-                <Clock className="w-4 h-4" /> Today's Shift Logs
-              </h4>
-              <div className="grid grid-cols-2 gap-3 text-center text-slate-800 font-sans">
-                <div className="bg-white p-3 rounded-2xl border border-indigo-100/50">
-                  <span className="block text-xl font-extrabold text-slate-800">{totalVisitsToday}</span>
-                  <span className="text-[10px] text-slate-400 font-bold">Shift Entrants</span>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border border-indigo-100/50">
-                  <span className="block text-xl font-extrabold text-slate-800">{activeInsideVehicles.length}</span>
-                  <span className="text-[10px] text-slate-400 font-bold">On Premise Now</span>
-                </div>
-              </div>
-            </div>
-
           </div>
         </div>
       )}
@@ -1906,7 +1961,7 @@ export default function SecurityVisitorTab({
                 <div className="text-[12px] space-y-3 leading-relaxed text-slate-300">
                   <p>✔ Number plate recognition auditing: <strong className="text-white">Active (100% compliant)</strong></p>
                   <p>✔ Driving License sighting procedure: <strong className="text-white">Active (Guard sighted records)</strong></p>
-                  <p>✔ Active pre-auth resident pass codes: <strong className="text-white">{visitorPasses.filter(p => p.STATUS === "Active").length} active</strong></p>
+                  <p>✔ Active pre-auth resident pass codes: <strong className="text-white">{visitorPasses.filter(p => p.STATUS === "Active" && getMalaysiaDateString(p.END_DATE) >= getMalaysiaDateString(new Date())).length} active</strong></p>
                   <p>✔ Pending shift orders: <strong className="text-white">{securityInstructions.length} pending checks</strong></p>
                 </div>
               </div>
@@ -2089,15 +2144,27 @@ export default function SecurityVisitorTab({
 
               {/* Real Video Element */}
               {!cameraError && !isCameraLoading && (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover rounded-2xl bg-slate-900 ${
-                    activeCameraMode === "snapshot" ? "-scale-x-100" : ""
-                  }`}
-                />
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover rounded-2xl bg-slate-900 ${
+                      cameraFacingMode === "user" ? "-scale-x-100" : ""
+                    }`}
+                  />
+                  {/* Camera Switch Toggle Button overlay */}
+                  <button
+                    type="button"
+                    onClick={() => setCameraFacingMode(prev => prev === "user" ? "environment" : "user")}
+                    className="absolute top-3 right-3 z-20 px-2.5 py-1.5 bg-slate-950/90 hover:bg-slate-900 border border-slate-800 text-white rounded-xl shadow-lg hover:scale-105 transition active:scale-95 cursor-pointer flex items-center gap-1.5 text-[9.5px] font-mono tracking-wider font-extrabold uppercase"
+                    title="Switch Front/Back Camera"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-indigo-400 animate-spin-slow" />
+                    <span>{cameraFacingMode === "user" ? "Front (Selfie)" : "Back (Vehicle)"}</span>
+                  </button>
+                </>
               )}
 
               {/* Fallback Static Simulated Viewport */}
@@ -2170,7 +2237,7 @@ export default function SecurityVisitorTab({
                     className="w-full p-2 bg-slate-950 text-white rounded-xl border border-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
                     <option value="">-- Choose pre-authorized visitor pass --</option>
-                    {visitorPasses.filter(p => p.STATUS === "Active").map((p) => (
+                    {visitorPasses.filter(p => p.STATUS === "Active" && getMalaysiaDateString(p.END_DATE) >= getMalaysiaDateString(new Date())).map((p) => (
                       <option key={p.ID} value={p.ID}>
                         {p.VISITOR_NAME} ({p.VEHICLE_PLATE}) - Unit {p.HOUSE_UNIT} [{p.ID}]
                       </option>
@@ -2258,7 +2325,7 @@ export default function SecurityVisitorTab({
                     <button
                       type="button"
                       disabled={!selectedScanPass && !cameraError}
-                      onClick={() => handleExecuteQRScan(selectedScanPass || visitorPasses.filter(p => p.STATUS === "Active")[0]?.ID)}
+                      onClick={() => handleExecuteQRScan(selectedScanPass || visitorPasses.filter(p => p.STATUS === "Active" && getMalaysiaDateString(p.END_DATE) >= getMalaysiaDateString(new Date()))[0]?.ID)}
                       className={`flex-1 py-3 text-white font-extrabold text-xs rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
                         cameraError 
                           ? "bg-slate-800 hover:bg-slate-705 text-slate-300 border border-slate-700" 
@@ -2271,6 +2338,348 @@ export default function SecurityVisitorTab({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALL PRE-AUTHORIZED ACTIVE PASSES LIST MODAL */}
+      {showPassesModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans text-xs">
+          <div className={`w-full max-w-4xl border rounded-3xl shadow-2xl animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh] overflow-hidden ${
+            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-800"
+          }`}>
+            {/* Modal Header */}
+            <div className={`p-5 border-b flex items-center justify-between shrink-0 ${
+              isDarkMode ? "border-slate-800 bg-slate-900" : "border-slate-100 bg-slate-50"
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl ${isDarkMode ? "bg-indigo-950/40 text-indigo-400" : "bg-indigo-50/80 text-indigo-600"}`}>
+                  <QrCode className="w-5 h-5 font-bold" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm tracking-tight">Active Pre-Authorized Resident Passes</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Select any resident pre-authorized active pass below to automatically simulate a QR check-in scan.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPassesModal(false)}
+                className={`p-1.5 rounded-xl transition cursor-pointer ${
+                  isDarkMode ? "hover:bg-slate-800 text-slate-400 hover:text-slate-200" : "hover:bg-slate-200 text-slate-550 hover:text-slate-850"
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body: Filtering Controls & Table */}
+            <div className="p-5 flex-1 overflow-y-auto space-y-4">
+              
+              {/* Controls bar (Search, Filter, List per page) */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pb-2">
+                {/* Search */}
+                <div className="sm:col-span-5 relative">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, plate, unit, ID..."
+                    value={modalSearchValue}
+                    onChange={(e) => {
+                      setModalSearchValue(e.target.value);
+                      setModalPage(1);
+                    }}
+                    className={`w-full pl-9 pr-4 py-2 text-xs border rounded-xl outline-hidden focus:ring-1 transition ${
+                      isDarkMode
+                        ? "bg-slate-950 border-slate-800 text-white placeholder-slate-500 focus:ring-indigo-500"
+                        : "bg-white border-slate-220 placeholder-slate-400 focus:ring-indigo-600 text-slate-800"
+                    }`}
+                  />
+                  {modalSearchValue && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalSearchValue("");
+                        setModalPage(1);
+                      }}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Type */}
+                <div className="sm:col-span-4 flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Type:</span>
+                  <select
+                    value={modalFilterType}
+                    onChange={(e) => {
+                      setModalFilterType(e.target.value);
+                      setModalPage(1);
+                    }}
+                    className={`w-full py-2 px-3 text-xs border rounded-xl outline-hidden focus:ring-1 transition ${
+                      isDarkMode
+                        ? "bg-slate-950 border-slate-800 text-white focus:ring-indigo-500"
+                        : "bg-white border-slate-220 text-slate-805 focus:ring-indigo-600"
+                    }`}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="visitor">Visitor</option>
+                    <option value="contractor">Contractor</option>
+                    <option value="delivery">Delivery</option>
+                  </select>
+                </div>
+
+                {/* List per page */}
+                <div className="sm:col-span-3 flex items-center gap-2 justify-end">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Show:</span>
+                  <select
+                    value={modalItemsPerPage}
+                    onChange={(e) => {
+                      setModalItemsPerPage(Number(e.target.value));
+                      setModalPage(1);
+                    }}
+                    className={`py-2 px-3 text-xs border rounded-xl outline-hidden focus:ring-1 transition ${
+                      isDarkMode
+                        ? "bg-slate-950 border-slate-800 text-white focus:ring-indigo-500"
+                        : "bg-white border-slate-220 text-slate-805 focus:ring-indigo-600"
+                    }`}
+                  >
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                    <option value="25">25</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Table rendering */}
+              {(() => {
+                const filteredPasses = visitorPasses.filter((p) => {
+                  if (p.STATUS !== "Active") return false;
+                  
+                  // Skip expired passes
+                  if (getMalaysiaDateString(p.END_DATE) < getMalaysiaDateString(new Date())) return false;
+                  
+                  // Filter Type
+                  if (modalFilterType !== "all" && p.VISITOR_TYPE !== modalFilterType) {
+                    return false;
+                  }
+
+                  // Search term lookup
+                  if (modalSearchValue.trim()) {
+                    const searchLower = modalSearchValue.toLowerCase();
+                    const nameMatch = p.VISITOR_NAME?.toLowerCase().includes(searchLower);
+                    const plateMatch = p.VEHICLE_PLATE?.toLowerCase().includes(searchLower);
+                    const houseMatch = p.HOUSE_UNIT?.toLowerCase().includes(searchLower);
+                    const idMatch = p.ID?.toLowerCase().includes(searchLower);
+                    return nameMatch || plateMatch || houseMatch || idMatch;
+                  }
+                  
+                  return true;
+                });
+
+                const totalItems = filteredPasses.length;
+                const totalPages = Math.ceil(totalItems / modalItemsPerPage) || 1;
+                const startIndex = (modalPage - 1) * modalItemsPerPage;
+                const paginatedPasses = filteredPasses.slice(startIndex, startIndex + modalItemsPerPage);
+
+                return (
+                  <div className="space-y-4">
+                    <div className={`border rounded-2xl overflow-hidden ${
+                      isDarkMode ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"
+                    }`}>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className={`border-b text-[10px] font-extrabold uppercase tracking-wider ${
+                              isDarkMode ? "bg-slate-950 border-slate-800 text-slate-400" : "bg-slate-50 border-slate-200 text-slate-500"
+                            }`}>
+                              <th className="p-3">Pass ID</th>
+                              <th className="p-3">Visitor Name</th>
+                              <th className="p-3">Visitor Type</th>
+                              <th className="p-3">House Unit</th>
+                              <th className="p-3">Vehicle Plate</th>
+                              <th className="p-3">Validity Duration</th>
+                              <th className="p-3 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100/10">
+                            {paginatedPasses.length > 0 ? (
+                              paginatedPasses.map((p) => (
+                                <tr 
+                                  key={p.ID}
+                                  className={`text-[11px] font-semibold transition ${
+                                    isDarkMode ? "hover:bg-slate-900/60 text-slate-200" : "hover:bg-slate-50 text-slate-700"
+                                  }`}
+                                >
+                                  <td className="p-3 font-mono font-bold text-indigo-500">{p.ID}</td>
+                                  <td className="p-3 text-slate-800 dark:text-slate-150 font-bold">{p.VISITOR_NAME}</td>
+                                  <td className="p-3">
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
+                                      p.VISITOR_TYPE === "visitor" 
+                                        ? "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-350"
+                                        : p.VISITOR_TYPE === "contractor"
+                                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-350"
+                                        : "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-350"
+                                    }`}>
+                                      {p.VISITOR_TYPE}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 font-mono text-slate-705 dark:text-slate-400">Unit {p.HOUSE_UNIT}</td>
+                                  <td className="p-3">
+                                    <span className="uppercase font-bold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded-lg font-mono border border-slate-200 dark:border-slate-800 text-[10.5px]">
+                                      {p.VEHICLE_PLATE}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-slate-800 dark:text-slate-300">
+                                    <div>{p.START_DATE} ~ {p.END_DATE}</div>
+                                    <div className="text-[9.5px] text-slate-500 mt-0.5 font-mono">Hrs: {p.TIME_RANGE}</div>
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScanPassId(p.ID);
+                                        handleSimulateQRScan(p.ID);
+                                        setShowPassesModal(false);
+                                      }}
+                                      className="py-1.5 px-3 bg-indigo-650 hover:bg-indigo-700 hover:scale-105 active:scale-95 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer transition shadow-xs uppercase tracking-wide"
+                                    >
+                                      <UserCheck className="w-3 h-3" />
+                                      <span>Simulate Scan</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={7} className="p-8 text-center text-slate-400 font-bold">
+                                  No active, matching pre-authorized passes found.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Pagination control footer bar */}
+                    {totalItems > 0 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                        <span className="text-[10.5px] text-slate-500 font-semibold dark:text-slate-400">
+                          Showing <strong className="text-slate-700 dark:text-slate-300">{Math.min(startIndex + 1, totalItems)}</strong> to{" "}
+                          <strong className="text-slate-700 dark:text-slate-300">{Math.min(startIndex + modalItemsPerPage, totalItems)}</strong> of{" "}
+                          <strong className="text-indigo-600 font-extrabold">{totalItems}</strong> entries
+                        </span>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* First & Prev */}
+                          <button
+                            type="button"
+                            disabled={modalPage === 1}
+                            onClick={() => setModalPage(1)}
+                            className={`px-2.5 py-1.5 rounded-lg border font-bold transition text-[10.5px] ${
+                              modalPage === 1
+                                ? "opacity-40 cursor-not-allowed border-slate-200 text-slate-400"
+                                : isDarkMode
+                                ? "border-slate-700 text-slate-200 hover:bg-slate-800"
+                                : "border-slate-220 hover:bg-slate-100 cursor-pointer text-slate-600"
+                            }`}
+                          >
+                            First
+                          </button>
+                          <button
+                            type="button"
+                            disabled={modalPage === 1}
+                            onClick={() => setModalPage((v) => Math.max(v - 1, 1))}
+                            className={`px-2.5 py-1.5 rounded-lg border font-bold transition text-[10.5px] ${
+                              modalPage === 1
+                                ? "opacity-40 cursor-not-allowed border-slate-200 text-slate-400"
+                                : isDarkMode
+                                ? "border-slate-700 text-slate-200 hover:bg-slate-800"
+                                : "border-slate-220 hover:bg-slate-100 cursor-pointer text-slate-600"
+                            }`}
+                          >
+                            Prev
+                          </button>
+
+                          {/* Pages loop */}
+                          {Array.from({ length: totalPages }).map((_, i) => {
+                            const pageNum = i + 1;
+                            const isCurrent = pageNum === modalPage;
+                            return (
+                              <button
+                                key={pageNum}
+                                type="button"
+                                onClick={() => setModalPage(pageNum)}
+                                className={`w-7 h-7 rounded-lg font-bold text-[10.5px] transition cursor-pointer flex items-center justify-center ${
+                                  isCurrent
+                                    ? "bg-indigo-600 text-white font-extrabold"
+                                    : isDarkMode
+                                    ? "border border-slate-700 hover:bg-slate-800 text-slate-300"
+                                    : "border border-slate-220 hover:bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+
+                          {/* Next & Last */}
+                          <button
+                            type="button"
+                            disabled={modalPage === totalPages}
+                            onClick={() => setModalPage((v) => Math.min(v + 1, totalPages))}
+                            className={`px-2.5 py-1.5 rounded-lg border font-bold transition text-[10.5px] ${
+                              modalPage === totalPages
+                                ? "opacity-40 cursor-not-allowed border-slate-200 text-slate-400"
+                                : isDarkMode
+                                ? "border-slate-705 text-slate-200 hover:bg-slate-850"
+                                : "border-slate-220 hover:bg-slate-100 cursor-pointer text-slate-600"
+                            }`}
+                          >
+                            Next
+                          </button>
+                          <button
+                            type="button"
+                            disabled={modalPage === totalPages}
+                            onClick={() => setModalPage(totalPages)}
+                            className={`px-2.5 py-1.5 rounded-lg border font-bold transition text-[10.5px] ${
+                              modalPage === totalPages
+                                ? "opacity-40 cursor-not-allowed border-slate-200 text-slate-400"
+                                : isDarkMode
+                                ? "border-slate-705 text-slate-200 hover:bg-slate-850"
+                                : "border-slate-220 hover:bg-slate-100 cursor-pointer text-slate-600"
+                            }`}
+                          >
+                            Last
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className={`p-4 border-t flex justify-end shrink-0 ${
+              isDarkMode ? "border-slate-800 bg-slate-900" : "border-slate-100 bg-slate-50"
+            }`}>
+              <button
+                type="button"
+                onClick={() => setShowPassesModal(false)}
+                className={`py-2 px-5 font-bold rounded-xl text-xs cursor-pointer transition ${
+                  isDarkMode 
+                    ? "bg-slate-800 hover:bg-slate-755 text-slate-300" 
+                    : "bg-white hover:bg-slate-100 border border-slate-200 text-slate-750 shadow-xs"
+                }`}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
