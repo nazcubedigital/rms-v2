@@ -1156,7 +1156,7 @@ export default function SecurityVisitorTab({
                       onChange={(e) => setVisitorType(e.target.value as any)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 font-bold text-slate-800"
                     >
-                      <option value="visitor">👤 Standard Social Visitor</option>
+                      <option value="visitor">👤 Standard Visitor</option>
                       <option value="contractor">🛠️ Repair / Contractor Work</option>
                       <option value="delivery">📦 Courier / Food Delivery</option>
                       <option value="others">🔘 Miscellaneous</option>
@@ -1534,7 +1534,7 @@ export default function SecurityVisitorTab({
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 transition text-slate-800 font-bold"
                 >
                   <option value="All">All Types</option>
-                  <option value="visitor">👤 Standard Social Visitor</option>
+                  <option value="visitor">👤 Standard Visitor</option>
                   <option value="contractor">🛠️ Contractors</option>
                   <option value="delivery">📦 Courier Delivery</option>
                   <option value="others">🔘 Miscellaneous</option>
@@ -1570,7 +1570,7 @@ export default function SecurityVisitorTab({
                   <thead>
                     <tr className="bg-slate-50 font-bold text-slate-705 border-b border-slate-200 text-[11.5px] font-sans">
                       <th className="p-4 w-24">Log ID</th>
-                      <th className="p-4 w-28 text-center">Audit Photo</th>
+                      <th className="p-4 w-28 text-center">Vehicle Photo</th>
                       <th className="p-4 w-24 text-center">Unit</th>
                       <th className="p-4 w-32">Vehicle/Plate</th>
                       <th className="p-4">Visitor & Purpose Details</th>
@@ -1708,7 +1708,7 @@ export default function SecurityVisitorTab({
           <div className="bg-white rounded-2xl border border-slate-205 p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h3 className="font-extrabold text-sm text-slate-800">Guard Shift Guidelines & Instructions</h3>
-              <p className="text-[11px] text-gray-500 mt-0.5">Urgent orders, pipeline inspections, and temporary gate allowances issued by Management.</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Urgent orders, inspections, tasks, and temporary gate allowances issued by Management.</p>
             </div>
             
             {/* Show Composer button for Manager/Admin roles */}
@@ -1835,20 +1835,20 @@ export default function SecurityVisitorTab({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Urgency Rank</label>
+                    <label className="block font-bold text-slate-700 mb-1">Urgency Level</label>
                     <select
                       value={newInstUrgency}
                       onChange={(e) => setNewInstUrgency(e.target.value as any)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 font-bold"
                     >
-                      <option value="Normal">Normal operational review</option>
-                      <option value="High">⚠️ High - strict check needed</option>
-                      <option value="Critical">🔴 Critical - immediate shift order</option>
+                      <option value="Normal">NORMAL - Operational Review</option>
+                      <option value="High">⚠️ HIGH - Strict Check needed</option>
+                      <option value="Critical">🔴 CRITICAL - Immediate Shift Order</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Instruction Narrative & Action Scope</label>
+                    <label className="block font-bold text-slate-700 mb-1">Instruction & Action Scope</label>
                     <textarea
                       required
                       rows={5}

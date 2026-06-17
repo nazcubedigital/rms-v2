@@ -255,7 +255,7 @@ export default function ProductsTab({
                       <div className="mt-6 pt-3.5 border-t border-slate-100 flex items-center justify-between">
                         <div>
                           <span className="text-[9px] text-slate-400 font-bold block uppercase font-mono tracking-wider">
-                            Base Tariff Price
+                            Base Price
                           </span>
                           <span className="text-lg font-extrabold text-slate-900 font-mono">
                             {currency} {(Number(p.AMOUNT) || 0).toFixed(2)}
@@ -268,7 +268,7 @@ export default function ProductsTab({
                             className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer font-bold flex items-center gap-1 text-[11px]"
                           >
                             <Edit2 className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Manage Tariff</span>
+                            <span>Manage Product</span>
                           </button>
                         )}
                       </div>
@@ -289,7 +289,7 @@ export default function ProductsTab({
             className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200 text-slate-800"
           >
             <h3 className="text-base font-bold text-slate-900 mb-4 border-b border-slate-100 pb-3">
-              {editProduct ? "Modify Rate Tariff Price" : "Register Base Residence Tariff Code"}
+              {editProduct ? "Modify Product/Item" : "Register New Product/Item"}
             </h3>
 
             <div className="space-y-4 text-xs font-sans">
@@ -349,7 +349,7 @@ export default function ProductsTab({
 
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-slate-500 font-semibold mb-1">Cashbook Ledger Category</label>
+                  <label className="block text-slate-500 font-semibold mb-1">Category (Cashbook)</label>
                   <select
                     required
                     value={category}
@@ -366,7 +366,7 @@ export default function ProductsTab({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-500 font-semibold mb-1">Set Base Price ({currency})</label>
+                  <label className="block text-slate-500 font-semibold mb-1">Base Price ({currency})</label>
                   <input
                     required
                     type="number"
@@ -380,7 +380,7 @@ export default function ProductsTab({
                 </div>
               </div>
               <p className="text-[10px] text-slate-400 leading-normal pl-1 border-l-2 border-indigo-200">
-                This configures the base billing rate and mapped column category dynamically inside the Annual Cashbook ledger sheets.
+                This configures the base billing rate and mapped category dynamically inside the Annual Cashbook ledger sheets.
               </p>
             </div>
 
@@ -413,7 +413,7 @@ export default function ProductsTab({
                   disabled={isSubmitting}
                   className="py-2.5 px-5 rounded-xl bg-slate-950 text-white font-semibold hover:bg-slate-800 shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? "Syncing..." : editProduct ? "Save Changes" : "Create Tariff"}
+                  {isSubmitting ? "Syncing..." : editProduct ? "Save Changes" : "Create Product"}
                 </button>
               </div>
             </div>

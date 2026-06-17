@@ -482,9 +482,9 @@ export default function ResidentsTab({
                 <th className="p-4 font-semibold text-[10px]">Owner ID</th>
                 <th className="p-4 font-semibold text-[10px]">Owner Full Name</th>
                 <th className="p-4 font-semibold text-[10px]">Contact Info</th>
-                <th className="p-4 font-semibold text-[10px]">Occupancy status</th>
+                <th className="p-4 font-semibold text-[10px]">Status</th>
                 <th className="p-4 font-semibold text-[10px]">Registered RFID cards</th>
-                <th className="p-4 font-semibold text-[10px]">Outstanding Account Due (2026)</th>
+                <th className="p-4 font-semibold text-[10px]">Outstanding Due</th>
                 <th className="p-4 font-semibold text-[10px] text-center">Actions</th>
               </tr>
             </thead>

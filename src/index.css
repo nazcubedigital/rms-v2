@@ -43,3 +43,14 @@
   background: #94a3b8;
 }
 
+/* Startup loading bar slide animation */
+@keyframes slideProgress {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
+.animate-slide-progress {
+  animation: slideProgress 1.8s infinite ease-in-out;
+}
+
+

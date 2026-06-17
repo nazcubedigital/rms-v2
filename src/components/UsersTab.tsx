@@ -218,7 +218,7 @@ export default function UsersTab({
             className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 border border-slate-950 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 shadow-sm transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Create Management Account
+            Create Account
           </button>
         )}
       </div>

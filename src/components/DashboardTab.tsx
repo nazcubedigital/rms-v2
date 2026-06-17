@@ -120,10 +120,10 @@ export default function DashboardTab({ state, onNavigateTab }: DashboardTabProps
       {/* Top Banner Overview */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white text-slate-900 rounded-xl p-6 border border-slate-200/80 shadow-sm">
         <div>
-          <span className="text-slate-400 text-[10px] font-bold tracking-wider uppercase">Nazcube HMS Smart Analytics</span>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 mt-0.5">{state.settings.appName || "Nazcube HMS"} Overview</h2>
+          <span className="text-slate-400 text-[10px] font-bold tracking-wider uppercase">Nazcube RMS Smart Analytics</span>
+          <h2 className="text-xl font-bold tracking-tight text-slate-900 mt-0.5">{state.settings.appName || "Residence Management Suite"} Overview</h2>
           <p className="text-slate-500 text-xs mt-1 leading-relaxed">
-            Connected to Sheets database: <code className="bg-slate-50 text-slate-700 border border-slate-150 px-1.5 py-0.5 rounded font-mono text-[9.5px]">Active Google Sheets (Sync verified)</code>
+            Connected to Database: <code className="bg-slate-50 text-slate-700 border border-slate-150 px-1.5 py-0.5 rounded font-mono text-[9.5px]">Active (Sync verified)</code>
           </p>
         </div>
         <div className="flex items-center gap-4 bg-emerald-50/50 px-4 py-3 rounded-xl border border-emerald-100/70">

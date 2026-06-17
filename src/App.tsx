@@ -315,6 +315,20 @@ export default function App() {
     const initializeApp = async () => {
       let savedUrl = localStorage.getItem("naz_gas_url");
       const savedStates = localStorage.getItem("naz_local_db");
+
+      // Auto-query the server-side config to see if configured on another device
+      try {
+        const response = await fetch("/api/gas-url");
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.url && data.url.startsWith("https://")) {
+            savedUrl = data.url;
+            localStorage.setItem("naz_gas_url", savedUrl);
+          }
+        }
+      } catch (err) {
+        console.warn("Backend configuration auto-sync check unavailable:", err);
+      }
       
       // Auto-detect if injected by Google Apps Script template hosting environment
       // @ts-ignore
@@ -341,7 +355,18 @@ export default function App() {
       if (savedUrl) {
         setGasUrl(savedUrl);
         // Await the connection test to let the startup loader give it time to connect
-        await testConnectionAndSync(savedUrl, false, false);
+        const success = await testConnectionAndSync(savedUrl, false, false);
+        
+        // If connected successfully, guarantee the server backend is updated
+        if (success) {
+          try {
+            fetch("/api/gas-url", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: savedUrl })
+            }).catch(() => {});
+          } catch (e) {}
+        }
       } else {
         // First opening - show required popup and disable startup loader
         setShowConfigPopup(true);
@@ -436,6 +461,16 @@ export default function App() {
         setDbState(sanitizeState(formattedState));
         setIsConnected(true);
         localStorage.setItem("naz_gas_url", targetUrl);
+        
+        // Push validated configuration to backend so all other endpoints instantly synchronize
+        try {
+          fetch("/api/gas-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: targetUrl })
+          }).catch(() => {});
+        } catch (e) {}
+
         if (notifySuccess) alert("Connection with Google Sheets authorized successfully! State loaded.");
         return true;
       } else {

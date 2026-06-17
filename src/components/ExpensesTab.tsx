@@ -391,13 +391,13 @@ export default function ExpensesTab({
           >
             <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-1.5">
               <TrendingDown className="w-5 h-5 text-rose-500" />
-              {editExpense ? "Modify Expense Record" : "Log Operational Management Expense"}
+              {editExpense ? "Modify Expense Record" : "New Expense Record"}
             </h3>
 
             <div className="space-y-4 text-xs font-sans">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-500 font-semibold mb-1">Expense recorded Date</label>
+                  <label className="block text-gray-500 font-semibold mb-1">Recorded Date</label>
                   <input
                     required
                     type="date"
@@ -408,7 +408,7 @@ export default function ExpensesTab({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-500 font-semibold mb-1">Select Expenditure category</label>
+                  <label className="block text-gray-500 font-semibold mb-1">Expenditure Category</label>
                   <select
                     value={category}
                     id="new-expense-category"
@@ -436,7 +436,7 @@ export default function ExpensesTab({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-500 font-semibold mb-1">Contact Phone Number</label>
+                  <label className="block text-gray-500 font-semibold mb-1">Phone Number</label>
                   <input
                     type="text"
                     id="new-expense-contact-no"
@@ -451,7 +451,7 @@ export default function ExpensesTab({
 
               {/* Row 3: Itemized Details / Explanation */}
               <div>
-                <label className="block text-gray-500 font-semibold mb-1">Itemized Details / Explanation</label>
+                <label className="block text-gray-500 font-semibold mb-1">Details / Description</label>
                 <textarea
                   required
                   id="new-expense-details"
@@ -466,7 +466,7 @@ export default function ExpensesTab({
               {/* Row 4: Logged Amount & Transaction type */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-500 font-semibold mb-1">Logged Amount (RM)</label>
+                  <label className="block text-gray-500 font-semibold mb-1">Amount (RM)</label>
                   <input
                     required
                     type="number"
@@ -479,7 +479,7 @@ export default function ExpensesTab({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-500 font-semibold mb-1">Transaction type</label>
+                  <label className="block text-gray-500 font-semibold mb-1">Transaction Type</label>
                   <select
                     value={typeOfPayment}
                     id="new-expense-type-of-payment"
@@ -487,8 +487,10 @@ export default function ExpensesTab({
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 text-slate-800 outline-none"
                   >
                     <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="QR Pay">QR Pay</option>
                     <option value="Cash">Cash</option>
                     <option value="Credit Card">Credit Card</option>
+                    <option value="Dedit Card">Dedit Card</option>
                     <option value="Cheque">Cheque</option>
                   </select>
                 </div>

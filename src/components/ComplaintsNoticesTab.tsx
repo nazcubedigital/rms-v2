@@ -964,7 +964,7 @@ export default function ComplaintsNoticesTab({
 
                 <form onSubmit={handleCreateNotice} className="space-y-4 text-xs font-sans">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Notice Headline Title</label>
+                    <label className="block font-bold text-slate-700 mb-1">Headline Title</label>
                     <input
                       type="text"
                       required
@@ -1105,7 +1105,7 @@ export default function ComplaintsNoticesTab({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Notice Body Message</label>
+                    <label className="block font-bold text-slate-700 mb-1">Notice Message</label>
                     <textarea
                       required
                       rows={4}
@@ -1225,7 +1225,7 @@ export default function ComplaintsNoticesTab({
             
             <form onSubmit={handleCreateNotice} className="space-y-4 text-xs font-sans">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Notice Headline Title</label>
+                <label className="block font-bold text-slate-700 mb-1">Headline Title</label>
                 <input
                   type="text"
                   required
@@ -1369,7 +1369,7 @@ export default function ComplaintsNoticesTab({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Notice Body Message</label>
+                <label className="block font-bold text-slate-700 mb-1">Notice Message</label>
                 <textarea
                   required
                   rows={5}

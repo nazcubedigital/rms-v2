@@ -7,9 +7,10 @@ interface SettingsTabProps {
   currentUser: User | null;
   onUpdateSettings: (newSettings: AppSettings) => Promise<any>;
   onUploadLogo?: (base64Data: string, fileName: string) => Promise<string>;
+  onOpenConnectionManager?: () => void;
 }
 
-export default function SettingsTab({ state, currentUser, onUpdateSettings, onUploadLogo }: SettingsTabProps) {
+export default function SettingsTab({ state, currentUser, onUpdateSettings, onUploadLogo, onOpenConnectionManager }: SettingsTabProps) {
   const { settings } = state;
 
   const [isSaving, setIsSaving] = useState(false);
@@ -207,12 +208,12 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
           <div className="bg-white p-6 rounded-2xl border border-slate-150 shadow-sm space-y-4">
             <h3 className="text-sm font-bold border-b border-slate-100 pb-2 mb-3 text-slate-800 flex items-center gap-1.5">
               <Settings2 className="w-4 h-4 text-indigo-600" />
-              General Enterprise Info
+              General Company Info
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
               <div>
-                <label className="block text-gray-500 font-semibold mb-1">Web App Name</label>
+                <label className="block text-gray-500 font-semibold mb-1">System Name</label>
                 <input
                   required
                   type="text"
@@ -237,7 +238,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
               <div>
-                <label className="block text-gray-500 font-semibold mb-1">Contact Office Phone</label>
+                <label className="block text-gray-500 font-semibold mb-1">Contact Phone Number</label>
                 <input
                   required
                   type="text"
@@ -248,7 +249,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
                 />
               </div>
               <div>
-                <label className="block text-gray-500 font-semibold mb-1">Office Contact Email</label>
+                <label className="block text-gray-500 font-semibold mb-1">Contact Email</label>
                 <input
                   required
                   type="email"
@@ -261,7 +262,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
             </div>
 
             <div className="text-xs font-sans">
-              <label className="block text-gray-500 font-semibold mb-1">Physical Address (on Invoices/Headers)</label>
+              <label className="block text-gray-500 font-semibold mb-1">Company Address</label>
               <textarea
                 required
                 id="settings-companyaddress"
@@ -277,7 +278,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
           <div className="bg-white p-6 rounded-2xl border border-slate-150 shadow-sm space-y-4">
             <h3 className="text-sm font-bold border-b border-slate-100 pb-2 mb-3 text-slate-800 flex items-center gap-1.5">
               <Sliders className="w-4 h-4 text-indigo-600" />
-              Invoicing & Finance Rate Constants
+              Billing & Finance Rate Setting
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-sans">
@@ -411,7 +412,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
               </div>
               
               <div>
-                <label className="block text-gray-500 font-semibold mb-1">Default Email Introductory Body Message</label>
+                <label className="block text-gray-500 font-semibold mb-1">Default Email Body Message</label>
                 <textarea
                   id="settings-default-email-body"
                   rows={4}
@@ -434,7 +435,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
             <h3 className="text-sm font-bold border-b border-slate-150 pb-2 mb-3 text-slate-950 flex items-center gap-1.5">
               <Upload className="w-4 h-4 text-indigo-650" />
-              Company Header Logo
+              Company Logo
             </h3>
 
             <div className="space-y-4">
@@ -564,7 +565,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
           <div className="bg-white p-6 rounded-xl border border-slate-205/60 shadow-sm space-y-4">
             <h3 className="text-sm font-bold border-b border-slate-150 pb-2 mb-3 text-slate-900 flex items-center gap-1.5">
               <Palette className="w-4 h-4 text-slate-900" />
-              Portal Visual Themes
+              System Themes
             </h3>
 
             <div className="text-xs font-sans space-y-3">
@@ -597,7 +598,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
           <div className="bg-white p-6 rounded-xl border border-slate-200/60 shadow-sm space-y-4 text-xs">
             <h3 className="text-sm font-bold border-b border-slate-150 pb-2 mb-3 text-slate-900 flex items-center gap-1.5">
               <Upload className="w-4 h-4 text-indigo-650" />
-              Google Drive Folder Upload Hub
+              Storage - Google Drive Folder Hub
             </h3>
             <p className="text-slate-500 leading-relaxed text-[11px]">
               Provide a public Google Drive folder URL. Complaint attachments and notices files upload directly into this secure workspace folder.
@@ -620,16 +621,30 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
           <div className="bg-white p-6 rounded-xl border border-slate-200/60 shadow-sm space-y-4 text-xs">
             <h3 className="text-sm font-bold border-b border-slate-150 pb-2 mb-3 text-slate-900 flex items-center gap-1.5">
               <Database className="w-4 h-4 text-slate-900" />
-              Connected Google Sheets Schema
+              Database API Endpoint
             </h3>
             
             <p className="text-slate-500 leading-relaxed">
               Your configurations, payments, resident rosters, products, and users sync instantly to Google Sheets.
             </p>
 
-            <div className="p-3 bg-slate-50 text-slate-800 rounded-lg border border-slate-200/60 shadow-sm space-y-1">
-              <span className="font-bold block text-[10px] uppercase text-slate-400">Active database</span>
-              <p className="font-mono text-[9px] break-all text-slate-650">{localStorage.getItem("naz_gas_url") || "Offline Sandbox Mode"}</p>
+            <div className="p-3 bg-slate-50 text-slate-800 rounded-lg border border-slate-200/60 shadow-sm space-y-2">
+              <div>
+                <span className="font-bold block text-[10px] uppercase text-slate-400">Active database</span>
+                <p className="font-mono text-[9px] break-all text-slate-650">{localStorage.getItem("naz_gas_url") || "Demo Sandbox Mode"}</p>
+              </div>
+              {currentUser?.Role === "admin" && onOpenConnectionManager && (
+                <div className="pt-2 border-t border-slate-200/60">
+                  <button
+                    type="button"
+                    onClick={onOpenConnectionManager}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-705 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm transition"
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    Configure Database Connection
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -649,7 +664,7 @@ export default function SettingsTab({ state, currentUser, onUpdateSettings, onUp
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Save Preferences Schema
+                  Save Preferences Setting
                 </>
               )}
             </button>

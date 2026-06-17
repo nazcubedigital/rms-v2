@@ -826,7 +826,7 @@ export default function BillingTab({
                     className={`py-2 px-3 rounded-xl border text-center font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${pmtType === "Non-Resident" ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-slate-50 border-slate-200 text-gray-600"}`}
                   >
                     <UserCheck className="w-4 h-4" />
-                    Outside Guest / Brand
+                    Guest / Contractor
                   </button>
                 </div>
               </div>
@@ -834,7 +834,7 @@ export default function BillingTab({
               {/* Dynamic Customer fields */}
               {pmtType === "Resident" ? (
                 <div>
-                  <label className="block text-gray-500 font-semibold mb-1">Select Resident Name</label>
+                  <label className="block text-gray-500 font-semibold mb-1">Select Resident</label>
                   <select
                     required
                     id="member-owner-id"
@@ -894,13 +894,13 @@ export default function BillingTab({
 
               {/* Product and details dynamic listing */}
               <div className="space-y-3">
-                <label className="block text-gray-500 font-semibold">Product Items &amp; Accounting Pricing</label>
+                <label className="block text-gray-500 font-semibold">Items &amp; Pricing</label>
                 
                 <div className="max-h-[300px] overflow-y-auto space-y-3 pr-1">
                   {formRows.map((row, idx) => (
                     <div key={idx} className="bg-slate-50/70 rounded-xl p-3 border border-slate-200/50 space-y-3 relative group">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 font-mono">Product Item #{idx + 1}</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 font-mono">Item #{idx + 1}</span>
                         {!editPayment && formRows.length > 1 && (
                           <button
                             type="button"
@@ -915,7 +915,7 @@ export default function BillingTab({
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
-                          <label className="block text-[9px] text-gray-400 font-semibold mb-0.5">Title (PRODUCT TAB)</label>
+                          <label className="block text-[9px] text-gray-400 font-semibold mb-0.5">Item (Product)</label>
                           <select
                             disabled={!!editPayment}
                             value={row.product}
@@ -968,7 +968,7 @@ export default function BillingTab({
                         </div>
 
                         <div>
-                          <label className="block text-[9px] text-gray-400 font-semibold mb-0.5">SST SST Tax (RM)</label>
+                          <label className="block text-[9px] text-gray-400 font-semibold mb-0.5">SST Tax (RM)</label>
                           <input
                             type="number"
                             step="any"
@@ -989,7 +989,7 @@ export default function BillingTab({
                     className="w-full py-2 border-2 border-dashed border-slate-200 hover:border-indigo-400 hover:text-indigo-600 text-slate-500 rounded-xl font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Add Product Item ({formRows.length}/10)
+                    Add Item ({formRows.length}/10)
                   </button>
                 )}
               </div>
@@ -1004,8 +1004,10 @@ export default function BillingTab({
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 text-slate-800 outline-none"
                 >
                   <option value="Online Transfer">Online Transfer</option>
+                  <option value="QR Pay">QR Pay</option>
                   <option value="Cash">Cash</option>
                   <option value="Credit Card">Credit Card</option>
+                  <option value="Dedit Card">Dedit Card</option>
                   <option value="Cheque">Cheque</option>
                 </select>
               </div>
@@ -1027,7 +1029,7 @@ export default function BillingTab({
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60 flex justify-between items-center text-xs">
                 <div>
                   <span className="text-slate-500 block font-medium">Total Receipt Cost:</span>
-                  <p className="text-[10px] text-slate-440">Sum of (Qty x Price - Discount + Tax) for all rows</p>
+                  <p className="text-[10px] text-slate-440">Sum of (Qty x Price - Discount + Tax)</p>
                 </div>
                 <div className="text-right">
                   <span className="font-extrabold text-slate-900 text-base font-mono">
